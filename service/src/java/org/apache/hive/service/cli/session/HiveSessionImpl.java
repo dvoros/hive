@@ -355,7 +355,7 @@ public class HiveSessionImpl implements HiveSession {
   }
 
   private synchronized void acquireAfterOpLock(boolean userAccess) {
-    // Need to make sure that the this HiveServer2's session's SessionState is
+    // Need to make sure that this HiveServer2's session's session state is
     // stored in the thread local for the handler thread.
     SessionState.setCurrentSessionState(sessionState);
     sessionState.setForwardedAddresses(SessionManager.getForwardedAddresses());
@@ -365,6 +365,10 @@ public class HiveSessionImpl implements HiveSession {
     }
     // set the thread name with the logging prefix.
     sessionState.updateThreadName();
+    // set the log context for debugging
+    LOG.info("We are setting the hadoop caller context to " + sessionState.getSessionId()
+        + " for thread " + Thread.currentThread().getName());
+    ShimLoader.getHadoopShims().setHadoopCallerContext(sessionState.getSessionId());
     Hive.set(sessionHive);
   }
 
@@ -390,6 +394,10 @@ public class HiveSessionImpl implements HiveSession {
       // can be null in-case of junit tests. skip reset.
       // reset thread name at release time.
       sessionState.resetThreadName();
+      // reset the HDFS caller context.
+      LOG.info("We are resetting the hadoop caller context for thread "
+          + Thread.currentThread().getName());
+      ShimLoader.getHadoopShims().setHadoopCallerContext("");
     }
 
     SessionState.detachSession();

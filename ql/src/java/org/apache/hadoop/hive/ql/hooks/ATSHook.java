@@ -79,8 +79,8 @@ public class ATSHook implements ExecuteWithHookContext {
   private static final String DEFAULT_ATS_DOMAIN = "hive_default_ats";
 
   private enum OtherInfoTypes {
-    QUERY, STATUS, TEZ, MAPRED, INVOKER_INFO, SESSION_ID, THREAD_NAME, VERSION,
-    CLIENT_IP_ADDRESS, HIVE_ADDRESS, HIVE_INSTANCE_TYPE, CONF, PERF,
+    QUERY, STATUS, TEZ, MAPRED, INVOKER_INFO, SESSION_ID, LOG_TRACE_ID, THREAD_NAME, VERSION,
+    CLIENT_IP_ADDRESS, HIVE_ADDRESS, HIVE_INSTANCE_TYPE, CONF, PERF, LLAP_APP_ID
   };
   private enum ExecutionMode {
     MR, TEZ, LLAP, SPARK, NONE
@@ -275,8 +275,7 @@ public class ATSHook implements ExecuteWithHookContext {
                                                   String query = plan.getQueryStr();
                                                   JSONObject explainPlan = explain.getJSONPlan(null,
                                                                   work);
-						  String logID = conf.getLogIdVar(hookContext.getSessionId());
-						  List<String> tablesRead = getTablesFromEntitySet(hookContext
+                                                  List<String> tablesRead = getTablesFromEntitySet(hookContext
                                                                   .getInputs());
                                                   List<String> tablesWritten = getTablesFromEntitySet(hookContext
                                                                   .getOutputs());
@@ -297,9 +296,9 @@ public class ATSHook implements ExecuteWithHookContext {
                                                                   hookContext.getIpAddress(),
                                                                   hiveInstanceAddress, hiveInstanceType,
                                                                   hookContext.getSessionId(),
-                                                                  logID,
+                                                                  plan.getUserProvidedContext(),
                                                                   hookContext.getThreadId(), executionMode,
-                                                                  tablesRead, tablesWritten, conf));
+                                                                  tablesRead, tablesWritten, conf, llapId, domainId));
                                                   break;
                                           case POST_EXEC_HOOK:
                                                   fireAndForget(createPostHookEvent(queryId,
@@ -361,8 +360,10 @@ public class ATSHook implements ExecuteWithHookContext {
   TimelineEntity createPreHookEvent(String queryId, String query, JSONObject explainPlan,
       long startTime, String user, String requestuser, int numMrJobs, int numTezJobs, String opId,
       String clientIpAddress, String hiveInstanceAddress, String hiveInstanceType,
-      String sessionID, String logID, String threadId, String executionMode,
-      List<String> tablesRead, List<String> tablesWritten, HiveConf conf) throws Exception {
+      String sessionID, String logTraceId, String threadId, String executionMode,
+      List<String> tablesRead, List<String> tablesWritten, HiveConf conf, ApplicationId llapAppId,
+      String domainId)
+          throws Exception {
 
     JSONObject queryObj = new JSONObject(new LinkedHashMap<>());
     queryObj.put("queryText", query);
@@ -409,8 +410,10 @@ public class ATSHook implements ExecuteWithHookContext {
     atsEntity.addOtherInfo(OtherInfoTypes.TEZ.name(), numTezJobs > 0);
     atsEntity.addOtherInfo(OtherInfoTypes.MAPRED.name(), numMrJobs > 0);
     atsEntity.addOtherInfo(OtherInfoTypes.SESSION_ID.name(), sessionID);
-    atsEntity.addOtherInfo(OtherInfoTypes.INVOKER_INFO.name(), logID);
     atsEntity.addOtherInfo(OtherInfoTypes.THREAD_NAME.name(), threadId);
+    if ((logTraceId != null) && (logTraceId.equals("") == false)) {
+      atsEntity.addOtherInfo(OtherInfoTypes.LOG_TRACE_ID.name(), logTraceId);
+    }
     atsEntity.addOtherInfo(OtherInfoTypes.VERSION.name(), VERSION);
     if (clientIpAddress != null) {
       atsEntity.addOtherInfo(OtherInfoTypes.CLIENT_IP_ADDRESS.name(), clientIpAddress);
@@ -418,6 +421,10 @@ public class ATSHook implements ExecuteWithHookContext {
     atsEntity.addOtherInfo(OtherInfoTypes.HIVE_ADDRESS.name(), hiveInstanceAddress);
     atsEntity.addOtherInfo(OtherInfoTypes.HIVE_INSTANCE_TYPE.name(), hiveInstanceType);
     atsEntity.addOtherInfo(OtherInfoTypes.CONF.name(), confObj.toString());
+    if (llapAppId != null) {
+      atsEntity.addOtherInfo(OtherInfoTypes.LLAP_APP_ID.name(), llapAppId.toString());
+    }
+    atsEntity.setDomainId(domainId);
 
     return atsEntity;
   }

@@ -112,6 +112,8 @@ import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.hive.ql.session.SessionState.LogHelper;
 import org.apache.hadoop.hive.serde2.ByteStream;
 import org.apache.hadoop.hive.serde2.thrift.ThriftJDBCBinarySerDe;
+import org.apache.hadoop.hive.shims.HadoopShims;
+import org.apache.hadoop.hive.shims.ShimLoader;
 import org.apache.hadoop.hive.shims.Utils;
 import org.apache.hadoop.mapred.ClusterStatus;
 import org.apache.hadoop.mapred.JobClient;
@@ -396,12 +398,13 @@ public class Driver implements CommandProcessor {
     }
 
     if (ctx != null && ctx.getExplainAnalyze() != AnalyzeState.RUNNING) {
-      close();
+      closeInProcess(false);
     }
+
     if (isInterrupted()) {
       return handleInterruption("at beginning of compilation."); //indicate if need clean resource
     }
-    
+
     if (resetTaskIds) {
       TaskFactory.resetId();
     }
@@ -416,6 +419,8 @@ public class Driver implements CommandProcessor {
 
     SessionState.get().setupQueryCurrentTimestamp();
 
+    String originalCallerContext = "";
+    HadoopShims shim = ShimLoader.getHadoopShims();
     boolean compileError = false;
     try {
       // Initialize the transaction manager.  This must be done before analyze is called.
@@ -437,6 +442,13 @@ public class Driver implements CommandProcessor {
       };
       ShutdownHookManager.addShutdownHook(shutdownRunner, SHUTDOWN_HOOK_PRIORITY);
 
+      // we set the hadoop caller context to the query id as soon as we have one.
+      // initially, the caller context is the session id (when creating temp directories)
+      originalCallerContext = shim.getHadoopCallerContext();
+      LOG.info("We are setting the hadoop caller context from " + originalCallerContext + " to "
+          + queryId);
+      shim.setHadoopQueryContext(queryId);
+
       if (isInterrupted()) {
         return handleInterruption("before parsing and analysing the query");
       }
@@ -444,7 +456,7 @@ public class Driver implements CommandProcessor {
       if (ctx == null) {
         ctx = new Context(conf);
       }
-      
+
       ctx.setTryCount(getTryCount());
       ctx.setCmd(command);
       ctx.setHDFSCleanup(true);
@@ -502,7 +514,9 @@ public class Driver implements CommandProcessor {
       // get the output schema
       schema = getSchema(sem, conf);
       plan = new QueryPlan(queryStr, sem, perfLogger.getStartTime(PerfLogger.DRIVER_RUN), queryId,
-        queryState.getHiveOperation(), schema);
+        queryState.getHiveOperation(), schema,
+        SessionState.get().getSessionId(), Thread.currentThread().getName(),
+        HiveConf.getVar(conf, HiveConf.ConfVars.HIVE_LOG_TRACE_ID));
 
       conf.setQueryString(queryStr);
 
@@ -598,6 +612,10 @@ public class Driver implements CommandProcessor {
       } else {
         LOG.info("Completed compiling command(queryId=" + queryId + "); Time taken: " + duration + " seconds");
       }
+
+      // reset the caller id.
+      LOG.info("We are resetting the hadoop caller context to " + originalCallerContext);
+      shim.setHadoopCallerContext(originalCallerContext);
     }
   }
 
@@ -687,7 +705,7 @@ public class Driver implements CommandProcessor {
     }
 
     // The following union operation returns a union, which traverses over the
-    // first set once and then  then over each element of second set, in order, 
+    // first set once and then  then over each element of second set, in order,
     // that is not contained in first. This means it doesn't replace anything
     // in first set, and would preserve the WriteType in WriteEntity in first
     // set in case of outputs list.
@@ -1009,7 +1027,7 @@ public class Driver implements CommandProcessor {
     conf.set(ValidTxnList.VALID_TXNS_KEY, txnStr);
     if(plan.getFetchTask() != null) {
       /**
-       * This is needed for {@link HiveConf.ConfVars.HIVEFETCHTASKCONVERSION} optimization which 
+       * This is needed for {@link HiveConf.ConfVars.HIVEFETCHTASKCONVERSION} optimization which
        * initializes JobConf in FetchOperator before recordValidTxns() but this has to be done
        * after locks are acquired to avoid race conditions in ACID.
        */
@@ -1663,8 +1681,13 @@ public class Driver implements CommandProcessor {
     maxthreads = HiveConf.getIntVar(conf, HiveConf.ConfVars.EXECPARALLETHREADNUMBER);
 
     HookContext hookContext = null;
+
+    String originalCallerContext = "";
     boolean executionError = false;
     try {
+      LOG.info("Setting caller context to query id " + queryId);
+      originalCallerContext = ShimLoader.getHadoopShims().getHadoopCallerContext();
+      ShimLoader.getHadoopShims().setHadoopQueryContext(queryId);
       LOG.info("Executing command(queryId=" + queryId + "): " + queryStr);
       // compile and execute can get called from different threads in case of HS2
       // so clear timing in this thread's Hive object before proceeding.
@@ -1908,6 +1931,8 @@ public class Driver implements CommandProcessor {
           + org.apache.hadoop.util.StringUtils.stringifyException(e));
       return (12);
     } finally {
+      LOG.info("Resetting the caller context to " + originalCallerContext);
+      ShimLoader.getHadoopShims().setHadoopCallerContext(originalCallerContext);
       if (SessionState.get() != null) {
         SessionState.get().getHiveHistory().endQuery(queryId);
       }
@@ -2348,7 +2373,7 @@ public class Driver implements CommandProcessor {
     this.operationId = opId;
   }
 
-  /** 
+  /**
    * Resets QueryState to get new queryId on Driver reuse.
    */
   public void resetQueryState() {

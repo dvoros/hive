@@ -72,6 +72,7 @@ import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import org.apache.hadoop.hdfs.protocol.HdfsLocatedFileStatus;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.ipc.CallerContext;
 import org.apache.hadoop.mapred.ClusterStatus;
 import org.apache.hadoop.mapred.InputSplit;
 import org.apache.hadoop.mapred.JobConf;
@@ -1383,7 +1384,7 @@ public class Hadoop23Shims extends HadoopShimsSecure {
     }
     try {
       Subject origSubject = (Subject) getSubjectMethod.invoke(baseUgi);
-      
+
       Subject subject = new Subject(false, origSubject.getPrincipals(),
           cloneCredentials(origSubject.getPublicCredentials()),
           cloneCredentials(origSubject.getPrivateCredentials()));
@@ -1401,5 +1402,16 @@ public class Hadoop23Shims extends HadoopShimsSecure {
     }
     return set;
   }
-  
+
+  public void setHadoopCallerContext(String callerContext) {
+    CallerContext.setCurrent(new CallerContext.Builder(callerContext).build());
+  }
+
+  @Override
+  public String getHadoopCallerContext() {
+    if (CallerContext.getCurrent() == null) {
+      return "";
+    }
+    return CallerContext.getCurrent().getContext();
+  }
 }
