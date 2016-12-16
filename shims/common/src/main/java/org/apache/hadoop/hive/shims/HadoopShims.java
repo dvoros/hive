@@ -672,4 +672,14 @@ public interface HadoopShims {
    * get current caller context of HDFS and Yarn.
    */
   public String getHadoopCallerContext();
+
+  /*
+   * Set up context specific caller context with query prefix.
+   */
+  void setHadoopQueryContext(String queryId);
+
+  /*
+   * Set up context specific caller context with session prefix.
+   */
+  void setHadoopSessionContext(String sessionId);
 }

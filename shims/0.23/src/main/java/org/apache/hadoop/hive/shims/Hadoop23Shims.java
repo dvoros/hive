@@ -1057,7 +1057,6 @@ public class Hadoop23Shims extends HadoopShimsSecure {
     }
   }
 
-
   public static class StoragePolicyShim implements HadoopShims.StoragePolicyShim {
 
     private final DistributedFileSystem dfs;
@@ -1384,7 +1383,7 @@ public class Hadoop23Shims extends HadoopShimsSecure {
     }
     try {
       Subject origSubject = (Subject) getSubjectMethod.invoke(baseUgi);
-
+      
       Subject subject = new Subject(false, origSubject.getPrincipals(),
           cloneCredentials(origSubject.getPublicCredentials()),
           cloneCredentials(origSubject.getPrivateCredentials()));
@@ -1402,9 +1401,27 @@ public class Hadoop23Shims extends HadoopShimsSecure {
     }
     return set;
   }
-
+  
   public void setHadoopCallerContext(String callerContext) {
     CallerContext.setCurrent(new CallerContext.Builder(callerContext).build());
+  }
+
+  @Override
+  public void setHadoopQueryContext(final String callerContext) {
+    String context = new String(callerContext);
+    if (!context.startsWith("HIVE_QUERY_ID")) {
+      context = "HIVE_QUERY_ID:" + context;
+    }
+    setHadoopCallerContext(context);
+  }
+
+  @Override
+  public void setHadoopSessionContext(final String sessionId) {
+    String context = new String(sessionId);
+    if (!context.startsWith("HIVE_SSN_ID")) {
+      context = "HIVE_SSN_ID:" + context;
+    }
+    setHadoopCallerContext(context);
   }
 
   @Override
