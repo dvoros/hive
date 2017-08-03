@@ -180,9 +180,9 @@ import com.google.common.collect.Maps;
 
 /**
  * This class is the interface between the application logic and the database
- * store that contains the objects. Refrain putting any logic in mode.M* objects
+ * store that contains the objects. Refrain putting any logic in model.M* objects
  * or in this file as former could be auto generated and this class would need
- * to be made into a interface that can read both from a database and a
+ * to be made into an interface that can read both from a database and a
  * filestore.
  */
 public class ObjectStore implements RawStore, Configurable {
