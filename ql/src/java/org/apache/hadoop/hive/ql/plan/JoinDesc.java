@@ -34,6 +34,8 @@ import org.apache.hadoop.hive.ql.optimizer.signature.Signature;
 import org.apache.hadoop.hive.ql.parse.QBJoinTree;
 import org.apache.hadoop.hive.ql.plan.Explain.Level;
 
+import javax.annotation.Nullable;
+
 
 /**
  * Join operator Descriptor implementation.
@@ -398,6 +400,7 @@ public class JoinDesc extends AbstractOperatorDesc {
     return explainColMap;
   }
 
+  @Nullable
   public ExprNodeDesc [][] getJoinKeys() {
     return joinKeys;
   }

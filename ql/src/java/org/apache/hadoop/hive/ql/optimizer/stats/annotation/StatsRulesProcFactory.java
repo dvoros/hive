@@ -114,6 +114,8 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 
+import javax.annotation.Nullable;
+
 public class StatsRulesProcFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(StatsRulesProcFactory.class.getName());
@@ -2165,7 +2167,10 @@ public class StatsRulesProcFactory {
     }
 
     private boolean isJoinKey(final String columnName,
-        final ExprNodeDesc[][] joinKeys) {
+        @Nullable final ExprNodeDesc[][] joinKeys) {
+      if (joinKeys == null) {
+        return false;
+      }
       for (int i = 0; i < joinKeys.length; i++) {
         for (ExprNodeDesc expr : Arrays.asList(joinKeys[i])) {
 
